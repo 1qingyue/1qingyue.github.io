@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>爱心祝福</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+
+        .single-tip {
+            position: fixed;
+            background-color: #FF69B4;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            font-family: '微软雅黑', sans-serif;
+            font-weight: bold;
+            font-size: 20px;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .warm-tip {
+            position: fixed;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: '微软雅黑', sans-serif;
+            font-size: 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 999;
+            transition: all 0.8s ease-in-out;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // 高精度爱心曲线函数（数学上更标准的爱心方程）
+        function heartCurve(t) {
+            // 采用极坐标转换的标准爱心曲线，轨迹更精确
+            const r = 1 - Math.sin(t);
+            const x = 16 * Math.pow(Math.sin(t), 3);
+            const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+            return { x, y };
+        }
+
+        // 预计算爱心曲线上的参考点，用于分布优化
+        function precomputeHeartPoints(step = 0.05) {
+            const points = [];
+            for (let t = 0; t < Math.PI * 2; t += step) {
+                points.push(heartCurve(t));
+            }
+            return points;
+        }
+
+        // 预计算爱心参考点，提高轨迹精确度
+        const heartReferencePoints = precomputeHeartPoints();
+
+        // 获取屏幕中心位置
+        function getScreenCenter() {
+            return {
+                x: window.innerWidth / 2,
+                y: window.innerHeight / 2
+            };
+        }
+
+        // 显示中央核心祝福
+        function showSingleTip() {
+            const center = getScreenCenter();
+            const tipElement = document.createElement('div');
+            tipElement.className = 'single-tip';
+            tipElement.innerHTML = '爱与温暖，<br>始终在你身边❤️';
+            tipElement.style.opacity = '0';
+
+            // 设置位置
+            const width = 280;
+            const height = 100;
+            tipElement.style.left = `${center.x - width/2}px`;
+            tipElement.style.top = `${center.y - height/2}px`;
+            tipElement.style.width = `${width}px`;
+            tipElement.style.height = `${height}px`;
+
+            document.body.appendChild(tipElement);
+
+            // 淡入效果
+            setTimeout(() => {
+                tipElement.style.transition = 'opacity 1s ease-in-out';
+                tipElement.style.opacity = '0.98';
+            }, 100);
+
+            // 延长显示时间
+            setTimeout(() => {
+                tipElement.style.opacity = '0';
+                setTimeout(() => tipElement.remove(), 800);
+            }, 15000);
+
+            return {
+                x: center.x - width/2,
+                y: center.y - height/2,
+                width,
+                height
+            };
+        }
+
+        // 高精度位置计算函数（核心优化）
+        function getHeartPosition(singleTipArea) {
+            const center = getScreenCenter();
+            const { x: avoidX, y: avoidY, width: avoidWidth, height: avoidHeight } = singleTipArea;
+
+            // 缩放比例（控制整体大小）
+            const scale = 22;
+            // 减小随机偏移（提高轨迹精确度）
+            const baseOffset = 10;
+
+            // 分层分布策略：提高轨迹精确度
+            let t, offsetRange;
+            const rand = Math.random();
+
+            if (rand < 0.3) {
+                // 边缘层：严格遵循曲线，最小偏移
+                t = Math.random() * Math.PI * 2;
+                offsetRange = baseOffset * 0.5; // 边缘偏移最小，保证轮廓精确
+            } else if (rand < 0.7) {
+                // 中间层：中等偏移
+                t = Math.random() * Math.PI * 2;
+                offsetRange = baseOffset;
+            } else {
+                // 核心层：从预计算点中选择，提高分布均匀性
+                const randomPoint = heartReferencePoints[Math.floor(Math.random() * heartReferencePoints.length)];
+                const tIndex = heartReferencePoints.indexOf(randomPoint);
+                t = tIndex * 0.05; // 对应预计算时的step
+                offsetRange = baseOffset * 0.8;
+            }
+
+            const { x, y } = heartCurve(t);
+
+            // 精确计算位置，限制偏移范围
+            const posX = center.x + x * scale + (Math.random() * (offsetRange * 2) - offsetRange);
+            const posY = center.y - y * scale + (Math.random() * (offsetRange * 2) - offsetRange);
+
+            // 严格检查是否与中央弹窗重叠
+            if (posX > avoidX && posX < avoidX + avoidWidth &&
+                posY > avoidY && posY < avoidY + avoidHeight) {
+                return getHeartPosition(singleTipArea); // 重叠则重新计算
+            }
+
+            return { x: posX, y: posY };
+        }
+
+        // 显示温馨提示
+        function showWarmTip(singleTipArea) {
+            const tips = [
+                '多喝水哦~', '保持微笑呀', '每天都要元气满满',
+                '记得吃水果', '保持好心情', '好好爱自己', '我想你了',
+                '梦想成真', '顺顺利利', '早点休息', '你超棒的',
+                '别焦虑啦', '加油冲鸭', '你很特别', '会好起来的',
+                '要自信呀', '笑一个嘛', '今天加油', '记得想我',
+                '按时吃饭~', '少喝冷饮', '天冷添衣', '雨天带伞'
+            ];
+
+            const bgColors = [
+                'lightpink', 'skyblue', 'lightgreen', 'lavender',
+                'lightyellow', 'plum', 'mistyrose', 'honeydew'
+            ];
+
+            const tipElement = document.createElement('div');
+            tipElement.className = 'warm-tip';
+            tipElement.textContent = tips[Math.floor(Math.random() * tips.length)];
+            tipElement.style.backgroundColor = bgColors[Math.floor(Math.random() * bgColors.length)];
+
+            document.body.appendChild(tipElement);
+
+            // 获取高精度位置
+            const { x, y } = getHeartPosition(singleTipArea);
+            const rect = tipElement.getBoundingClientRect();
+            tipElement.style.left = `${x - rect.width/2}px`;
+            tipElement.style.top = `${y - rect.height/2}px`;
+
+            // 淡入效果
+            setTimeout(() => {
+                tipElement.style.opacity = '0.9';
+            }, 100);
+
+            // 显示时间
+            const duration = 8000 + Math.random() * 7000;
+            setTimeout(() => {
+                tipElement.style.opacity = '0';
+                setTimeout(() => tipElement.remove(), 800);
+            }, duration);
+        }
+
+        // 初始化
+        window.onload = () => {
+            const singleTipArea = showSingleTip();
+
+            setTimeout(() => {
+                // 保持适当数量，避免过度密集影响轨迹清晰度
+                const count = 200;
+                // 控制出现节奏，便于观察轨迹
+                for (let i = 0; i < count; i++) {
+                    setTimeout(() => showWarmTip(singleTipArea), i * 40);
+                }
+            }, 500);
+        };
+    </script>
+</body>
+</html>
