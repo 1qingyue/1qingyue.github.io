@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>粒子爱心与文字动画</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // 获取画布并设置尺寸
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+
+        // 适配窗口大小
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 颜色方案
+        const COLORS = [
+            'rgb(255, 99, 71)',
+            'rgb(255, 165, 0)',
+            'rgb(255, 105, 97)',
+            'rgb(255, 182, 193)',
+            'rgb(255, 20, 147)',
+            'rgb(138, 43, 226)'
+        ];
+
+        // 粒子类
+        class Particle {
+            constructor(phase = 0) {
+                // 初始位置（窗口边缘）
+                const edge = Math.floor(Math.random() * 4);
+                if (edge === 0) { // 上
+                    this.x = Math.random() * width;
+                    this.y = 0;
+                } else if (edge === 1) { // 下
+                    this.x = Math.random() * width;
+                    this.y = height;
+                } else if (edge === 2) { // 左
+                    this.x = 0;
+                    this.y = Math.random() * height;
+                } else { // 右
+                    this.x = width;
+                    this.y = Math.random() * height;
+                }
+
+                // 粒子属性
+                this.size = 1.8 + Math.random() * 1.2; // 1.8-3像素
+                this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                this.speed = 1.2 + Math.random() * 2;
+                this.phase = phase; // 0:爱心阶段, 1:文字阶段
+                this.targetIdx = Math.floor(Math.random() * 360);
+                this.arrived = false;
+            }
+
+            // 更新位置
+            update(lovePoints, textPoints) {
+                const targetPoints = this.phase === 0 ? lovePoints : textPoints;
+
+                // 确保目标索引有效
+                if (this.targetIdx >= targetPoints.length) {
+                    this.targetIdx = Math.floor(Math.random() * targetPoints.length);
+                }
+
+                const [targetX, targetY] = targetPoints[this.targetIdx];
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const distance = Math.hypot(dx, dy);
+
+                if (distance < this.speed) {
+                    this.x = targetX;
+                    this.y = targetY;
+                    this.arrived = true;
+                    // 轻微抖动
+                    if (Math.random() < 0.1) {
+                        this.x += (Math.random() - 0.5) * 2;
+                        this.y += (Math.random() - 0.5) * 2;
+                    }
+                } else {
+                    this.x += (dx / distance) * this.speed;
+                    this.y += (dy / distance) * this.speed;
+                }
+            }
+
+            // 绘制粒子
+            draw() {
+                // 绘制光晕
+                if (this.arrived) {
+                    ctx.beginPath();
+                    ctx.fillStyle = this.color.replace('rgb', 'rgba').replace(')', ', 0.15)');
+                    ctx.arc(this.x, this.y, this.size * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // 绘制粒子本体
+                ctx.beginPath();
+                ctx.fillStyle = this.color;
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 生成爱心轨迹点
+        function getLovePoints() {
+            const points = [];
+            const scale = Math.min(width, height) / 50; // 自适应缩放
+            const centerX = width / 2;
+            const centerY = height / 2 - scale * 2;
+
+            for (let angle = 0; angle < 360; angle++) {
+                const t = angle * Math.PI / 180;
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+                points.push([centerX + x * scale, centerY + y * scale]);
+            }
+            return points;
+        }
+
+        // 生成文字轨迹点（使用离屏canvas绘制文字）
+        function getTextPoints() {
+            const text = "珂珂永远开心";
+            const charSpacing = 120; // 字间距
+            const fontSize = Math.min(width, height) / 10; // 自适应字体大小
+
+            // 创建离屏canvas用于文字采样
+            const offscreenCanvas = document.createElement('canvas');
+            const offscreenCtx = offscreenCanvas.getContext('2d');
+
+            // 计算总宽度
+            const totalWidth = (text.length - 1) * charSpacing;
+            const startX = width / 2 - totalWidth / 2;
+            const startY = height / 2 + fontSize / 3;
+
+            const points = [];
+
+            // 逐个绘制文字
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const x = startX + i * charSpacing;
+
+                // 设置字体
+                offscreenCtx.font = `bold ${fontSize}px "SimHei", "Microsoft YaHei", sans-serif`;
+                const charWidth = offscreenCtx.measureText(char).width;
+                const charHeight = fontSize * 1.2;
+
+                // 调整canvas大小
+                offscreenCanvas.width = charWidth + 20;
+                offscreenCanvas.height = charHeight + 20;
+
+                // 绘制文字到离屏canvas
+                offscreenCtx.clearRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                offscreenCtx.font = `bold ${fontSize}px "SimHei", "Microsoft YaHei", sans-serif`;
+                offscreenCtx.fillStyle = 'white';
+                offscreenCtx.fillText(char, 10, charHeight);
+
+                // 采样文字像素
+                const imageData = offscreenCtx.getImageData(0, 0, offscreenCanvas.width, offscreenCanvas.height);
+                const pixels = imageData.data;
+
+                // 每2像素采样一次
+                for (let y = 0; y < offscreenCanvas.height; y += 2) {
+                    for (let x = 0; x < offscreenCanvas.width; x += 2) {
+                        const index = (y * offscreenCanvas.width + x) * 4;
+                        if (pixels[index + 3] > 100) { // 只取不透明像素
+                            points.push([
+                                x - 10 + startX + i * charSpacing,
+                                y - charHeight + startY
+                            ]);
+                        }
+                    }
+                }
+
+                // 补充内部点
+                for (let j = 0; j < 250; j++) {
+                    const px = x - charWidth/2 + Math.random() * charWidth;
+                    const py = startY - charHeight/2 + Math.random() * charHeight;
+                    points.push([px, py]);
+                }
+            }
+
+            return points;
+        }
+
+        // 初始化
+        const lovePoints = getLovePoints();
+        const textPoints = getTextPoints();
+        let particles = [];
+        for (let i = 0; i < 3500; i++) {
+            particles.push(new Particle());
+        }
+
+        // 动画控制
+        let phase = 0; // 0:爱心阶段, 1:文字阶段
+        let phaseTimer = 0;
+        let bgAlpha = 0;
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 绘制背景
+            ctx.fillStyle = `rgba(0, 0, 0, ${bgAlpha})`;
+            ctx.fillRect(0, 0, width, height);
+            if (bgAlpha < 0.9) bgAlpha += 0.005;
+
+            // 阶段控制（7秒后切换）
+            phaseTimer++;
+            if (phaseTimer > 420 && phase === 0) {
+                phase = 1;
+                particles.forEach(p => {
+                    p.phase = 1;
+                    p.arrived = false;
+                    p.targetIdx = Math.floor(Math.random() * textPoints.length);
+                });
+            }
+
+            // 更新并绘制粒子
+            particles.forEach(p => {
+                p.update(lovePoints, textPoints);
+                p.draw();
+            });
+
+            // 补充粒子
+            if (Math.random() < 0.5) {
+                particles.push(new Particle(phase));
+                if (particles.length > 4500) {
+                    particles.shift();
+                }
+            }
+        }
+
+        // 开始动画
+        animate();
+    </script>
+</body>
+</html>
